@@ -16,6 +16,7 @@ let delay, reverb, filter, distortion, chorus, bitcrush;
 let phaser, tremolo, pingPong;
 
 // Start Button Handler
+// Start Button Handler
 document.addEventListener('DOMContentLoaded', () => {
     const initBtn = document.getElementById('init-btn');
     const overlay = document.getElementById('start-overlay');
@@ -32,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setupAudio();
 
                 // Initialize System
-                init();
+                await init();
 
                 // Hide Overlay
                 overlay.style.opacity = '0';
@@ -591,7 +592,9 @@ function setupControls() {
 }
 
 // Re-init logic to ensure clean state
+// Re-init logic to ensure clean state
 async function init() {
+    await Tone.start();
     setupTracks();
     createUI();
     updateKeyboard();
