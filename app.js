@@ -11,41 +11,70 @@ let currentOctave = 3;
 let sequencerData = Array(TRACK_COUNT).fill().map(() => Array(STEP_COUNT).fill(null));
 let isGlobalFxActive = true;
 
-// FX Chain
-const delay = new Tone.FeedbackDelay("8n", 0.5).toDestination();
-delay.wet.value = 0;
+// FX Chain - Initialized later
+let delay, reverb, filter, distortion, chorus, bitcrush;
+let phaser, tremolo, pingPong;
 
-const reverb = new Tone.Reverb({
-    decay: 8,
-    preDelay: 0.2
-}).toDestination();
-reverb.wet.value = 0.3;
+// Start Button Handler
+document.addEventListener('DOMContentLoaded', () => {
+    const initBtn = document.getElementById('init-btn');
+    const overlay = document.getElementById('start-overlay');
 
-const filter = new Tone.Filter(20000, "lowpass").toDestination();
-const distortion = new Tone.Distortion(0.05).toDestination(); // Lower dist for cleaner sound
-const chorus = new Tone.Chorus(2, 2.5, 0.5).start().toDestination();
-const bitcrush = new Tone.BitCrusher(8).toDestination();
-// New Ambient FX
-const phaser = new Tone.Phaser({
-    frequency: 0.2,
-    octaves: 2,
-    baseFrequency: 350
-}).toDestination();
-phaser.wet.value = 0;
+    // Add event listener to existant button
+    if (initBtn) {
+        initBtn.addEventListener('click', async () => {
+            try {
+                // Ensure Tone is started
+                await Tone.start();
+                console.log('Audio Context started');
 
-const tremolo = new Tone.Tremolo(3, 0.5).toDestination().start();
-tremolo.wet.value = 0;
+                // Initialize Audio Chain
+                setupAudio();
 
-const pingPong = new Tone.PingPongDelay("4n", 0.4).toDestination();
-pingPong.wet.value = 0;
+                // Initialize System
+                init();
 
-// Initialize Audio Context on first click
-document.addEventListener('click', async () => {
-    if (Tone.context.state !== 'running') {
-        await Tone.start();
-        console.log('Audio Context started');
+                // Hide Overlay
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 500);
+            } catch (err) {
+                console.error(err);
+                alert("Failed to start audio engine: " + err);
+            }
+        });
     }
-}, { once: true });
+});
+
+function setupAudio() {
+    delay = new Tone.FeedbackDelay("8n", 0.5).toDestination();
+    delay.wet.value = 0;
+
+    reverb = new Tone.Reverb({
+        decay: 8,
+        preDelay: 0.2
+    }).toDestination();
+    reverb.wet.value = 0.3;
+
+    filter = new Tone.Filter(20000, "lowpass").toDestination();
+    distortion = new Tone.Distortion(0.05).toDestination();
+    chorus = new Tone.Chorus(2, 2.5, 0.5).start().toDestination();
+    bitcrush = new Tone.BitCrusher(8).toDestination();
+
+    phaser = new Tone.Phaser({
+        frequency: 0.2,
+        octaves: 2,
+        baseFrequency: 350
+    }).toDestination();
+    phaser.wet.value = 0;
+
+    tremolo = new Tone.Tremolo(3, 0.5).toDestination().start();
+    tremolo.wet.value = 0;
+
+    pingPong = new Tone.PingPongDelay("4n", 0.4).toDestination();
+    pingPong.wet.value = 0;
+}
 
 function setupTracks() {
     // LOWER OCTAVES for deep ambient.
@@ -178,14 +207,18 @@ function setupTracks() {
         let synthParams = [];
         // Generic params for all melodic synths
         synthParams = [
-            { name: 'ATK', min: 0.1, max: 5, set: (v) => {
-                if(synth.envelope) synth.envelope.attack = v;
-                else synth.set({ envelope: { attack: v }});
-            }},
-            { name: 'REL', min: 0.5, max: 15, set: (v) => {
-                if(synth.envelope) synth.envelope.release = v;
-                else synth.set({ envelope: { release: v }});
-            }}
+            {
+                name: 'ATK', min: 0.1, max: 5, set: (v) => {
+                    if (synth.envelope) synth.envelope.attack = v;
+                    else synth.set({ envelope: { attack: v } });
+                }
+            },
+            {
+                name: 'REL', min: 0.5, max: 15, set: (v) => {
+                    if (synth.envelope) synth.envelope.release = v;
+                    else synth.set({ envelope: { release: v } });
+                }
+            }
         ];
 
         tracks.push({
@@ -218,7 +251,7 @@ function createUI() {
         const muteContainer = document.createElement('div');
         muteContainer.style.display = 'flex';
         muteContainer.style.alignItems = 'center';
-        
+
         const muteBtn = document.createElement('div');
         muteBtn.className = 'track-mute-btn active'; // Starts active
         muteBtn.title = 'Active/Mute';
@@ -397,16 +430,16 @@ function applyGlobalFx() {
 
         // If FX is OFF, we generally want Wet = 0 or specific params nulled
         // If FX is ON, we respect the slider value.
-        
+
         let targetVal = val;
-        
+
         // Define null value for bypass logic
         // Most wet controls: 0
         // Distortion: 0
         // Filter Freq: Max (20000) or Min? Master LPF usually cuts highs, so bypass = Max.
         // BitCrusher: 8 bits is default? 16 bits is clean. Lower bits = more fx. 
         //             Slider Min 1, Max 16. If bypass -> 16.
-        
+
         if (!isGlobalFxActive) {
             if (fxType === 'filter') targetVal = 20000;
             else if (fxType === 'crush') targetVal = 16;
@@ -417,16 +450,16 @@ function applyGlobalFx() {
         switch (fxType) {
             case 'delay': delay.wet.value = targetVal; break;
             case 'reverb': reverb.wet.value = targetVal; break;
-            case 'crush': 
+            case 'crush':
                 if (isGlobalFxActive) {
-                   bitcrush.wet.value = 1;
-                   bitcrush.bits.value = val;
+                    bitcrush.wet.value = 1;
+                    bitcrush.bits.value = val;
                 } else {
-                   bitcrush.wet.value = 0;
+                    bitcrush.wet.value = 0;
                 }
                 break;
             case 'chorus': chorus.wet.value = targetVal; break;
-            case 'dist': 
+            case 'dist':
                 if (isGlobalFxActive) {
                     distortion.wet.value = 1;
                     distortion.distortion = val;
@@ -450,7 +483,7 @@ function setupControls() {
     const bpmDisplay = document.getElementById('bpm-display');
     const volKnob = document.getElementById('master-vol-knob');
     const volDisplay = document.getElementById('vol-display');
-    
+
     // FX Master Toggle
     const fxToggle = document.getElementById('fx-global-toggle');
     fxToggle.addEventListener('click', () => {
@@ -567,4 +600,4 @@ async function init() {
     Tone.Transport.bpm.value = 120;
 }
 
-init();
+// init();
