@@ -1,6 +1,7 @@
 const TRACK_COUNT = 7;
 const STEP_COUNT = 32;
-const TRACK_NAMES = ['SUB BASS', 'TIDAL WAVE', 'ABYSS FM', 'ASTRAL PAD', 'PULSAR', 'NEBULA NOISE', 'VOID TEXTURE'];
+// Updated names for melodic theme
+const TRACK_NAMES = ['DEEP OCEAN', 'SOFT PAD', 'GLASS BELL', 'CALM PULSE', 'AIRY VOX', 'WARM DRONE', 'SILKY RAIN'];
 
 let isPlaying = false;
 let currentStep = 0;
@@ -8,33 +9,34 @@ let tracks = [];
 let selectedNote = 'C3';
 let currentOctave = 3;
 let sequencerData = Array(TRACK_COUNT).fill().map(() => Array(STEP_COUNT).fill(null));
+let isGlobalFxActive = true;
 
 // FX Chain
 const delay = new Tone.FeedbackDelay("8n", 0.5).toDestination();
 delay.wet.value = 0;
 
 const reverb = new Tone.Reverb({
-    decay: 5,
-    preDelay: 0.1
+    decay: 8,
+    preDelay: 0.2
 }).toDestination();
 reverb.wet.value = 0.3;
 
 const filter = new Tone.Filter(20000, "lowpass").toDestination();
-const distortion = new Tone.Distortion(0.2).toDestination();
-const chorus = new Tone.Chorus(4, 2.5, 0.5).start().toDestination();
+const distortion = new Tone.Distortion(0.05).toDestination(); // Lower dist for cleaner sound
+const chorus = new Tone.Chorus(2, 2.5, 0.5).start().toDestination();
 const bitcrush = new Tone.BitCrusher(8).toDestination();
 // New Ambient FX
 const phaser = new Tone.Phaser({
-    frequency: 0.5,
-    octaves: 3,
+    frequency: 0.2,
+    octaves: 2,
     baseFrequency: 350
 }).toDestination();
 phaser.wet.value = 0;
 
-const tremolo = new Tone.Tremolo(4, 0.75).toDestination().start();
+const tremolo = new Tone.Tremolo(3, 0.5).toDestination().start();
 tremolo.wet.value = 0;
 
-const pingPong = new Tone.PingPongDelay("4n", 0.6).toDestination();
+const pingPong = new Tone.PingPongDelay("4n", 0.4).toDestination();
 pingPong.wet.value = 0;
 
 // Initialize Audio Context on first click
@@ -51,130 +53,118 @@ function setupTracks() {
 
     for (let i = 0; i < TRACK_COUNT; i++) {
         let synth;
-        // Audio Chain: Synth -> InsertFX1 -> InsertFX2 -> Filter -> Panner -> Volume -> Destination
-        const volume = new Tone.Volume(-12).toDestination();
+        const volume = new Tone.Volume(-15).toDestination(); // Quieter default
         const panner = new Tone.Panner((i / TRACK_COUNT) * 2 - 1).connect(volume);
-        // Start filters partially closed for softer sound (800Hz instead of 2000Hz)
-        const trackFilter = new Tone.Filter(800, "lowpass").connect(panner);
+        const trackFilter = new Tone.Filter(600, "lowpass").connect(panner); // Lower filter for softer sound
 
-        // Per-Track Insert Effects (initialized based on track type)
         let insertFX1, insertFX2;
-        let fxParams = []; // Store definitions for FX knobs
+        let fxParams = [];
 
-        // Helper for PolySynth Modulation
-        // For PolySynths, we often need to restart or use 'set' carefully. 
-        // We will use 'set' for parameters that support it.
-
+        // Melodic Quiet Long Sounds Setup
         switch (i) {
-            case 0: // VOID - Deep Sine Sub
+            case 0: // DEEP OCEAN - Sine Sub
                 synth = new Tone.PolySynth(Tone.Synth, {
                     oscillator: { type: 'sine' },
-                    // Softer Attack (4s) and long Release (8s)
-                    envelope: { attack: 4, decay: 3, sustain: 1, release: 8 }
+                    envelope: { attack: 2, decay: 4, sustain: 0.8, release: 8 }
                 });
-                // FX1: Chorus
-                insertFX1 = new Tone.Chorus(2, 2.5, 0.5).start();
-                // FX2: Tremolo
-                insertFX2 = new Tone.Tremolo(4, 0.5).start();
-
+                insertFX1 = new Tone.Chorus(1.5, 2.5, 0.3).start();
+                insertFX2 = new Tone.Tremolo(3, 0.3).start();
                 fxParams = [
                     { name: 'CHORUS', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
                     { name: 'TREM', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
 
-            case 1: // AETHER - Smooth Triangle Pad
+            case 1: // SOFT PAD - Triangle
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'triangle' }, // Triangle is softer than Saw
-                    envelope: { attack: 4, decay: 4, sustain: 0.8, release: 10 }
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 3, decay: 4, sustain: 0.7, release: 10 }
                 });
-                insertFX1 = new Tone.Phaser({ frequency: 0.1, octaves: 2, baseFrequency: 200 }); // Slower phaser
-                insertFX2 = new Tone.FeedbackDelay("4n", 0.4);
-
+                insertFX1 = new Tone.Phaser({ frequency: 0.1, octaves: 2, baseFrequency: 200 });
+                insertFX2 = new Tone.FeedbackDelay("2n", 0.3);
                 fxParams = [
                     { name: 'PHASE', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
                     { name: 'ECHO', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
 
-            case 2: // CRYSTAL - FM (Softened)
+            case 2: // GLASS BELL - FM Sine
                 synth = new Tone.PolySynth(Tone.FMSynth, {
-                    harmonicity: 3, modulationIndex: 2, // Lower mod index for less harshness
-                    envelope: { attack: 2, decay: 2, sustain: 0.6, release: 6 }
+                    harmonicity: 2, modulationIndex: 3,
+                    oscillator: { type: 'sine' },
+                    modulation: { type: 'sine' },
+                    envelope: { attack: 1, decay: 3, sustain: 0.5, release: 8 },
+                    modulationEnvelope: { attack: 0.5, decay: 2, sustain: 0.2, release: 6 }
                 });
-                insertFX1 = new Tone.BitCrusher(12); // Less aggressive crushing (higher bits)
-                insertFX2 = new Tone.Chebyshev(10); // Softer distortion
-
+                insertFX1 = new Tone.Chebyshev(2); // Very subtle
+                insertFX2 = new Tone.Reverb({ decay: 5, wet: 0.4 });
                 fxParams = [
-                    { name: 'CRUSH', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
-                    { name: 'DIST', min: 0, max: 1, set: (v) => insertFX2.wet.value = v },
+                    { name: 'COLOR', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
+                    { name: 'SPACE', min: 0, max: 0.8, set: (v) => insertFX2.wet.value = v },
                 ];
                 break;
 
-            case 3: // RESONANCE - Filtered Pulse (Softer)
+            case 3: // CALM PULSE - Pulse with width LFO? Plain Pulse filtered
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'pulse', width: 0.4 },
-                    envelope: { attack: 5, decay: 3, sustain: 0.5, release: 8 }
+                    oscillator: { type: 'pulse', width: 0.5 },
+                    envelope: { attack: 4, decay: 3, sustain: 0.6, release: 9 }
                 });
-                insertFX1 = new Tone.Filter(300, "highpass"); // Remove mud
-                insertFX2 = new Tone.Distortion(0.1); // Very subtle drive
-
+                insertFX1 = new Tone.Filter(400, "lowpass"); // Extra filter
+                insertFX2 = new Tone.Tremolo(4, 0.6).start();
                 fxParams = [
-                    { name: 'HPF', min: 0, max: 5000, set: (v) => insertFX1.frequency.value = v },
-                    { name: 'DRIVE', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
+                    { name: 'DAMP', min: 100, max: 2000, set: (v) => insertFX1.frequency.value = v },
+                    { name: 'SHAKE', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
 
-            case 4: // FLUX - AM Drone (Deep)
+            case 4: // AIRY VOX - AM Synth
                 synth = new Tone.PolySynth(Tone.AMSynth, {
-                    harmonicity: 1.5, // Softer harmonicity
-                    envelope: { attack: 4, decay: 2, sustain: 1, release: 10 }
+                    harmonicity: 1.25,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 3, decay: 3, sustain: 0.8, release: 10 }
                 });
-                insertFX1 = new Tone.Tremolo(6, 0.7).start();
-                insertFX2 = new Tone.Reverb({ decay: 6, wet: 0.6 }); // Large space
-
+                insertFX1 = new Tone.Vibrato(5, 0.2);
+                insertFX2 = new Tone.Reverb({ decay: 7, wet: 0.5 });
                 fxParams = [
-                    { name: 'RING', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
-                    { name: 'SPACE', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
+                    { name: 'VIB', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
+                    { name: 'AIR', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
 
-            case 5: // CELESTIA - Shimmer (Soft)
+            case 5: // WARM DRONE - Fat Sawtooth (Filtered)
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'sine' }, // Pure sine for shimmer base
-                    envelope: { attack: 2, decay: 2, sustain: 0.9, release: 6 }
+                    oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
+                    envelope: { attack: 5, decay: 4, sustain: 0.8, release: 12 }
                 });
-                insertFX1 = new Tone.PingPongDelay("2n", 0.5); // Slower delay
-                insertFX2 = new Tone.Vibrato(4, 0.1); // Subtle wobble
-
+                insertFX1 = new Tone.AutoFilter({ frequency: 0.1, baseFrequency: 100, octaves: 3 }).start();
+                insertFX2 = new Tone.PingPongDelay("2n", 0.4);
                 fxParams = [
-                    { name: 'DELAY', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
-                    { name: 'WOBBLE', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
+                    { name: 'WASH', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
+                    { name: 'BOUNCE', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
 
-            case 6: // ORBIT - Noise/Pulse (Ambient Wash)
-                synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'fatsawtooth', count: 2, spread: 20 },
-                    envelope: { attack: 6, decay: 4, sustain: 0.6, release: 12 }
+            case 6: // SILKY RAIN - White Noise? No, maybe high FM
+                synth = new Tone.PolySynth(Tone.FMSynth, {
+                    harmonicity: 8, modulationIndex: 5,
+                    oscillator: { type: 'sine' },
+                    modulation: { type: 'triangle' },
+                    envelope: { attack: 4, decay: 3, sustain: 0.5, release: 10 }
                 });
-                insertFX1 = new Tone.BitCrusher(8);
-                insertFX2 = new Tone.AutoFilter({ frequency: 0.2, baseFrequency: 150, octaves: 2 }).start(); // Very slow sweep
-
+                insertFX1 = new Tone.Phaser({ frequency: 0.5, octaves: 1, baseFrequency: 500 });
+                insertFX2 = new Tone.BitCrusher(12); // Light Crush
                 fxParams = [
-                    { name: 'BITS', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
-                    { name: 'SWEEP', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
+                    { name: 'MIST', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
+                    { name: 'GRIT', min: 0, max: 1, set: (v) => insertFX2.wet.value = v }
                 ];
                 break;
         }
 
-        // Connect Chain: Synth -> InsertFX1 -> InsertFX2 -> TrackFilter -> Panner -> Volume
         synth.connect(insertFX1);
         insertFX1.connect(insertFX2);
         insertFX2.connect(trackFilter);
 
-        // Global Matrix Sends (Post-Fader)
-        // Vital Fix: Connect Sends from VOLUME, not Filter, so the volume knob affects the effects too.
+        // Sends
         volume.connect(reverb);
         volume.connect(delay);
         volume.connect(phaser);
@@ -184,48 +174,19 @@ function setupTracks() {
         volume.connect(distortion);
         volume.connect(bitcrush);
 
-        // Define Synth Params (Params 1 & 2)
-        // Re-defining these ensuring they use correct SET syntax for PolySynth
+        // Params
         let synthParams = [];
-        if (i === 0) { // Void
-            synthParams = [
-                { name: 'ATK', min: 0.05, max: 4, set: (v) => synth.set({ envelope: { attack: v } }) },
-                { name: 'DET', min: -50, max: 50, set: (v) => synth.set({ detune: v }) }
-            ];
-        } else if (i === 1) { // Aether
-            synthParams = [
-                { name: 'ATK', min: 0.1, max: 4, set: (v) => synth.set({ envelope: { attack: v } }) },
-                { name: 'REL', min: 0.1, max: 10, set: (v) => synth.set({ envelope: { release: v } }) }
-            ];
-        } else if (i === 2) { // Crystal (FM)
-            synthParams = [
-                { name: 'HARM', min: 0.5, max: 8, set: (v) => synth.set({ harmonicity: v }) },
-                { name: 'MOD', min: 1, max: 30, set: (v) => synth.set({ modulationIndex: v }) }
-            ];
-        } else if (i === 3) { // Resonance
-            synthParams = [
-                { name: 'PORT', min: 0, max: 1, set: (v) => synth.set({ portamento: v }) }, // Portamento if enabled, or just Release
-                { name: 'DET', min: -50, max: 50, set: (v) => synth.set({ detune: v }) }
-            ];
-        } else if (i === 4) { // Flux
-            synthParams = [
-                { name: 'HARM', min: 0.5, max: 5, set: (v) => synth.set({ harmonicity: v }) },
-                { name: 'DET', min: -50, max: 50, set: (v) => synth.set({ detune: v }) }
-            ];
-        } else if (i === 5) { // Celestia
-            synthParams = [
-                { name: 'ATK', min: 0.05, max: 4, set: (v) => synth.set({ envelope: { attack: v } }) },
-                { name: 'REL', min: 0.5, max: 10, set: (v) => synth.set({ envelope: { release: v } }) }
-            ];
-        } else if (i === 6) { // Orbit
-            synthParams = [
-                { name: 'WIDTH', min: 0, max: 0.9, set: (v) => synth.set({ oscillator: { width: v } }) },
-                { name: 'DET', min: -50, max: 50, set: (v) => synth.set({ detune: v }) }
-            ];
-        }
-
-        // Ensure Volume is reasonable
-        volume.volume.value = -10;
+        // Generic params for all melodic synths
+        synthParams = [
+            { name: 'ATK', min: 0.1, max: 5, set: (v) => {
+                if(synth.envelope) synth.envelope.attack = v;
+                else synth.set({ envelope: { attack: v }});
+            }},
+            { name: 'REL', min: 0.5, max: 15, set: (v) => {
+                if(synth.envelope) synth.envelope.release = v;
+                else synth.set({ envelope: { release: v }});
+            }}
+        ];
 
         tracks.push({
             id: i,
@@ -236,7 +197,8 @@ function setupTracks() {
             panner: panner,
             note: SCALE[i],
             params: synthParams,
-            fxParams: fxParams
+            fxParams: fxParams,
+            active: true // New Active/Mute State
         });
     }
 }
@@ -252,6 +214,25 @@ function createUI() {
         const info = document.createElement('div');
         info.className = 'track-info';
 
+        // ACTIVE / MUTE BUTTON - Fixed layout
+        const muteContainer = document.createElement('div');
+        muteContainer.style.display = 'flex';
+        muteContainer.style.alignItems = 'center';
+        
+        const muteBtn = document.createElement('div');
+        muteBtn.className = 'track-mute-btn active'; // Starts active
+        muteBtn.title = 'Active/Mute';
+        muteBtn.addEventListener('click', () => {
+            track.active = !track.active;
+            if (track.active) {
+                muteBtn.classList.add('active');
+            } else {
+                muteBtn.classList.remove('active');
+            }
+        });
+        muteContainer.appendChild(muteBtn);
+        info.appendChild(muteContainer);
+
         const nameBadge = document.createElement('div');
         nameBadge.className = 'track-name-badge';
         nameBadge.innerHTML = `<div class="track-name">${track.name}</div>`;
@@ -260,7 +241,6 @@ function createUI() {
         const paramsGrid = document.createElement('div');
         paramsGrid.className = 'track-params-grid';
 
-        // Helper to make knobs
         const createKnob = (label, min, max, initial, updateFn) => {
             const container = document.createElement('div');
             container.style.display = 'flex';
@@ -272,7 +252,6 @@ function createUI() {
             knob.className = 'knob-mini';
             knob.title = label;
 
-            // Visual label
             const lbl = document.createElement('div');
             lbl.textContent = label;
             lbl.style.fontSize = '8px';
@@ -284,21 +263,13 @@ function createUI() {
             let currentVal = initial;
             let startY;
 
-            // Visual update
             const updateVisual = () => {
-                // Map min-max to rotation -140 to 140
                 const pct = (currentVal - min) / (max - min);
                 const deg = -140 + (pct * 280);
                 knob.style.transform = `rotate(${deg}deg)`;
             };
 
-            // Initial call
             updateVisual();
-            // Trigger updateFn once to ensure synth matches UI IF necessary, 
-            // but we usually trust the synth defaults. 
-            // However, our range logic assumes linear mapping. 
-            // We won't force updateFn on init to avoid overwriting careful defaults,
-            // but we will sync the visual to the approx initial value.
 
             knob.addEventListener('mousedown', (e) => {
                 startY = e.clientY;
@@ -321,46 +292,22 @@ function createUI() {
             return container;
         };
 
-        // Knob 1: VOL
-        paramsGrid.appendChild(createKnob('VOL', -60, 0, -12, (v) => track.volume.volume.value = v));
+        // VOL
+        paramsGrid.appendChild(createKnob('VOL', -60, 0, -15, (v) => track.volume.volume.value = v));
+        // FILTER
+        paramsGrid.appendChild(createKnob('CUT', 20, 5000, 600, (v) => track.filter.frequency.value = v));
 
-        // Knob 2: CUT
-        // Using a simple linear mapping here for simplicity, although freq is logarithmic.
-        paramsGrid.appendChild(createKnob('CUT', 20, 5000, 2000, (v) => track.filter.frequency.value = v));
-
-        // Knob 3: DUR (Duration/Release)
-        // Maps generic release 0.1s to 8s
-        // We use a small helper to safely set release on any synth type provided in setupTracks
-        paramsGrid.appendChild(createKnob('DUR', 0.1, 8, 3, (v) => {
-            const synth = track.instrument;
-            if (synth.envelope) {
-                synth.envelope.release = v;
-            } else if (synth instanceof Tone.PolySynth) {
-                synth.set({ envelope: { release: v } });
-            } else if (synth instanceof Tone.FMSynth) {
-                synth.envelope.release = v;
-                if (synth.modulationEnvelope) synth.modulationEnvelope.release = v;
-            }
-        }));
-
-        // Knob 4 & 5: Custom Params (Synth)
-        if (track.params && track.params.length >= 2) {
-            const p1 = track.params[0];
-            paramsGrid.appendChild(createKnob(p1.name, p1.min, p1.max, p1.min + (p1.max - p1.min) * 0.3, p1.set));
-
-            const p2 = track.params[1];
-            paramsGrid.appendChild(createKnob(p2.name, p2.min, p2.max, p2.min + (p2.max - p2.min) * 0.3, p2.set));
+        // Custom Params
+        if (track.params) {
+            track.params.forEach(p => {
+                paramsGrid.appendChild(createKnob(p.name, p.min, p.max, p.min + (p.max - p.min) * 0.5, p.set));
+            });
         }
-
-        // Knob 6 & 7: Insert FX Params
-        if (track.fxParams && track.fxParams.length >= 2) {
-            const fx1 = track.fxParams[0];
-            // Default wet usually 0 or low, let's start at 0.2 (20%)
-            // Min/Max are usually 0-1 for wet
-            paramsGrid.appendChild(createKnob(fx1.name, fx1.min, fx1.max, fx1.min + (fx1.max - fx1.min) * 0.2, fx1.set));
-
-            const fx2 = track.fxParams[1];
-            paramsGrid.appendChild(createKnob(fx2.name, fx2.min, fx2.max, fx2.min + (fx2.max - fx2.min) * 0.2, fx2.set));
+        // Insert FX Params
+        if (track.fxParams) {
+            track.fxParams.forEach(p => {
+                paramsGrid.appendChild(createKnob(p.name, p.min, p.max, p.min + (p.max - p.min) * 0.2, p.set));
+            });
         }
 
         info.appendChild(paramsGrid);
@@ -422,6 +369,9 @@ function repeat(time) {
     stepsAtThisIdx.forEach(s => s.classList.add('current'));
 
     for (let i = 0; i < TRACK_COUNT; i++) {
+        // CHECK ACTIVE STATE
+        if (!tracks[i].active) continue;
+
         const activeNote = sequencerData[i][step];
         if (activeNote) {
             const track = tracks[i];
@@ -437,6 +387,61 @@ function repeat(time) {
     currentStep++;
 }
 
+// Logic to apply FX settings depending on global toggle
+function applyGlobalFx() {
+    const inputs = document.querySelectorAll('.fx-param');
+    inputs.forEach(input => {
+        const fxType = input.dataset.fx;
+        const param = input.dataset.param;
+        const val = parseFloat(input.value);
+
+        // If FX is OFF, we generally want Wet = 0 or specific params nulled
+        // If FX is ON, we respect the slider value.
+        
+        let targetVal = val;
+        
+        // Define null value for bypass logic
+        // Most wet controls: 0
+        // Distortion: 0
+        // Filter Freq: Max (20000) or Min? Master LPF usually cuts highs, so bypass = Max.
+        // BitCrusher: 8 bits is default? 16 bits is clean. Lower bits = more fx. 
+        //             Slider Min 1, Max 16. If bypass -> 16.
+        
+        if (!isGlobalFxActive) {
+            if (fxType === 'filter') targetVal = 20000;
+            else if (fxType === 'crush') targetVal = 16;
+            else if (fxType === 'dist') targetVal = 0;
+            else targetVal = 0; // Everything else (wet) -> 0
+        }
+
+        switch (fxType) {
+            case 'delay': delay.wet.value = targetVal; break;
+            case 'reverb': reverb.wet.value = targetVal; break;
+            case 'crush': 
+                if (isGlobalFxActive) {
+                   bitcrush.wet.value = 1;
+                   bitcrush.bits.value = val;
+                } else {
+                   bitcrush.wet.value = 0;
+                }
+                break;
+            case 'chorus': chorus.wet.value = targetVal; break;
+            case 'dist': 
+                if (isGlobalFxActive) {
+                    distortion.wet.value = 1;
+                    distortion.distortion = val;
+                } else {
+                    distortion.wet.value = 0;
+                }
+                break;
+            case 'filter': filter.frequency.value = targetVal; break;
+            case 'phaser': phaser.wet.value = targetVal; break;
+            case 'tremolo': tremolo.wet.value = targetVal; break;
+            case 'pingpong': pingPong.wet.value = targetVal; break;
+        }
+    });
+}
+
 function setupControls() {
     const playBtn = document.getElementById('play-btn');
     const stopBtn = document.getElementById('stop-btn');
@@ -445,6 +450,19 @@ function setupControls() {
     const bpmDisplay = document.getElementById('bpm-display');
     const volKnob = document.getElementById('master-vol-knob');
     const volDisplay = document.getElementById('vol-display');
+    
+    // FX Master Toggle
+    const fxToggle = document.getElementById('fx-global-toggle');
+    fxToggle.addEventListener('click', () => {
+        isGlobalFxActive = !isGlobalFxActive;
+        fxToggle.textContent = isGlobalFxActive ? 'ON' : 'OFF';
+        if (isGlobalFxActive) {
+            fxToggle.classList.add('active');
+        } else {
+            fxToggle.classList.remove('active');
+        }
+        applyGlobalFx();
+    });
 
     let startY_bpm, currentBPM = 120;
     bpmKnob.addEventListener('mousedown', (e) => {
@@ -534,23 +552,12 @@ function setupControls() {
 
     document.querySelectorAll('.fx-param').forEach(input => {
         input.addEventListener('input', (e) => {
-            const fxType = e.target.dataset.fx;
-            const val = parseFloat(e.target.value);
-            switch (fxType) {
-                case 'delay': delay.wet.value = val; break;
-                case 'reverb': reverb.wet.value = val; break;
-                case 'crush': bitcrush.bits.value = val; break;
-                case 'chorus': chorus.wet.value = val; break;
-                case 'dist': distortion.distortion = val; break;
-                case 'filter': filter.frequency.value = val; break;
-                case 'phaser': phaser.wet.value = val; break;
-                case 'tremolo': tremolo.wet.value = val; break;
-                case 'pingpong': pingPong.wet.value = val; break;
-            }
+            applyGlobalFx();
         });
     });
 }
 
+// Re-init logic to ensure clean state
 async function init() {
     setupTracks();
     createUI();
