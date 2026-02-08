@@ -46,14 +46,16 @@ document.addEventListener('click', async () => {
 }, { once: true });
 
 function setupTracks() {
-    const SCALE = ['C2', 'G2', 'Eb3', 'G3', 'Bb3', 'C4', 'D4'];
+    // LOWER OCTAVES for deep ambient.
+    const SCALE = ['C1', 'G1', 'C2', 'Eb2', 'G2', 'Bb2', 'C3'];
 
     for (let i = 0; i < TRACK_COUNT; i++) {
         let synth;
         // Audio Chain: Synth -> InsertFX1 -> InsertFX2 -> Filter -> Panner -> Volume -> Destination
         const volume = new Tone.Volume(-12).toDestination();
         const panner = new Tone.Panner((i / TRACK_COUNT) * 2 - 1).connect(volume);
-        const trackFilter = new Tone.Filter(2000, "lowpass").connect(panner);
+        // Start filters partially closed for softer sound (800Hz instead of 2000Hz)
+        const trackFilter = new Tone.Filter(800, "lowpass").connect(panner);
 
         // Per-Track Insert Effects (initialized based on track type)
         let insertFX1, insertFX2;
@@ -64,10 +66,11 @@ function setupTracks() {
         // We will use 'set' for parameters that support it.
 
         switch (i) {
-            case 0: // VOID - Deep Sine Pad
+            case 0: // VOID - Deep Sine Sub
                 synth = new Tone.PolySynth(Tone.Synth, {
                     oscillator: { type: 'sine' },
-                    envelope: { attack: 2, decay: 3, sustain: 0.8, release: 5 }
+                    // Softer Attack (4s) and long Release (8s)
+                    envelope: { attack: 4, decay: 3, sustain: 1, release: 8 }
                 });
                 // FX1: Chorus
                 insertFX1 = new Tone.Chorus(2, 2.5, 0.5).start();
@@ -80,13 +83,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 1: // AETHER - High Pad
+            case 1: // AETHER - Smooth Triangle Pad
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'triangle' },
-                    envelope: { attack: 3, decay: 4, sustain: 0.7, release: 8 }
+                    oscillator: { type: 'triangle' }, // Triangle is softer than Saw
+                    envelope: { attack: 4, decay: 4, sustain: 0.8, release: 10 }
                 });
-                insertFX1 = new Tone.Phaser({ frequency: 0.5, octaves: 3, baseFrequency: 350 });
-                insertFX2 = new Tone.FeedbackDelay("8n", 0.3);
+                insertFX1 = new Tone.Phaser({ frequency: 0.1, octaves: 2, baseFrequency: 200 }); // Slower phaser
+                insertFX2 = new Tone.FeedbackDelay("4n", 0.4);
 
                 fxParams = [
                     { name: 'PHASE', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
@@ -94,13 +97,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 2: // CRYSTAL - FM
-                synth = new Tone.PolySynth(Tone.FMSynth, { // Use PolySynth wrapper for consistency
-                    harmonicity: 3, modulationIndex: 5,
-                    envelope: { attack: 0.5, decay: 2, sustain: 0.5, release: 4 }
+            case 2: // CRYSTAL - FM (Softened)
+                synth = new Tone.PolySynth(Tone.FMSynth, {
+                    harmonicity: 3, modulationIndex: 2, // Lower mod index for less harshness
+                    envelope: { attack: 2, decay: 2, sustain: 0.6, release: 6 }
                 });
-                insertFX1 = new Tone.BitCrusher(8);
-                insertFX2 = new Tone.Chebyshev(20); // Distortion
+                insertFX1 = new Tone.BitCrusher(12); // Less aggressive crushing (higher bits)
+                insertFX2 = new Tone.Chebyshev(10); // Softer distortion
 
                 fxParams = [
                     { name: 'CRUSH', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
@@ -108,13 +111,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 3: // RESONANCE - Saw
+            case 3: // RESONANCE - Filtered Pulse (Softer)
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'sawtooth' },
-                    envelope: { attack: 4, decay: 3, sustain: 0.6, release: 6 }
+                    oscillator: { type: 'pulse', width: 0.4 },
+                    envelope: { attack: 5, decay: 3, sustain: 0.5, release: 8 }
                 });
-                insertFX1 = new Tone.Filter(800, "highpass"); // Filter sweep effect
-                insertFX2 = new Tone.Distortion(0.4);
+                insertFX1 = new Tone.Filter(300, "highpass"); // Remove mud
+                insertFX2 = new Tone.Distortion(0.1); // Very subtle drive
 
                 fxParams = [
                     { name: 'HPF', min: 0, max: 5000, set: (v) => insertFX1.frequency.value = v },
@@ -122,13 +125,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 4: // FLUX - AM Drone
+            case 4: // FLUX - AM Drone (Deep)
                 synth = new Tone.PolySynth(Tone.AMSynth, {
-                    harmonicity: 2,
-                    envelope: { attack: 3, decay: 2, sustain: 1, release: 8 }
+                    harmonicity: 1.5, // Softer harmonicity
+                    envelope: { attack: 4, decay: 2, sustain: 1, release: 10 }
                 });
-                insertFX1 = new Tone.Tremolo(9, 0.9).start(); // Fast tremolo (ring mod-ish)
-                insertFX2 = new Tone.Reverb({ decay: 4, wet: 0.5 }); // Dedicated Reverb
+                insertFX1 = new Tone.Tremolo(6, 0.7).start();
+                insertFX2 = new Tone.Reverb({ decay: 6, wet: 0.6 }); // Large space
 
                 fxParams = [
                     { name: 'RING', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
@@ -136,13 +139,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 5: // CELESTIA - Shimmer
+            case 5: // CELESTIA - Shimmer (Soft)
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 1, decay: 1, sustain: 0.8, release: 5 }
+                    oscillator: { type: 'sine' }, // Pure sine for shimmer base
+                    envelope: { attack: 2, decay: 2, sustain: 0.9, release: 6 }
                 });
-                insertFX1 = new Tone.PingPongDelay("4n", 0.4);
-                insertFX2 = new Tone.Vibrato(5, 0.2);
+                insertFX1 = new Tone.PingPongDelay("2n", 0.5); // Slower delay
+                insertFX2 = new Tone.Vibrato(4, 0.1); // Subtle wobble
 
                 fxParams = [
                     { name: 'DELAY', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
@@ -150,13 +153,13 @@ function setupTracks() {
                 ];
                 break;
 
-            case 6: // ORBIT - Noise/Pulse
+            case 6: // ORBIT - Noise/Pulse (Ambient Wash)
                 synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'pulse', width: 0.5 },
-                    envelope: { attack: 4, decay: 2, sustain: 0.8, release: 8 }
+                    oscillator: { type: 'fatsawtooth', count: 2, spread: 20 },
+                    envelope: { attack: 6, decay: 4, sustain: 0.6, release: 12 }
                 });
-                insertFX1 = new Tone.BitCrusher(4);
-                insertFX2 = new Tone.AutoFilter({ frequency: 1, baseFrequency: 200, octaves: 2.6 }).start();
+                insertFX1 = new Tone.BitCrusher(8);
+                insertFX2 = new Tone.AutoFilter({ frequency: 0.2, baseFrequency: 150, octaves: 2 }).start(); // Very slow sweep
 
                 fxParams = [
                     { name: 'BITS', min: 0, max: 1, set: (v) => insertFX1.wet.value = v },
